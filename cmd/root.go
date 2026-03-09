@@ -514,7 +514,10 @@ func newRunCommand(ctx context.Context, input *Input) func(*cobra.Command, []str
 			if err != nil {
 				return err
 			}
-			return plannerErr
+			if len(filterPlan.Stages) == 0 {
+				return plannerErr
+			}
+			return nil
 		}
 
 		if graph {
@@ -522,7 +525,10 @@ func newRunCommand(ctx context.Context, input *Input) func(*cobra.Command, []str
 			if err != nil {
 				return err
 			}
-			return plannerErr
+			if len(filterPlan.Stages) == 0 {
+				return plannerErr
+			}
+			return nil
 		}
 
 		// plan with triggered jobs
@@ -697,7 +703,10 @@ func newRunCommand(ctx context.Context, input *Input) func(*cobra.Command, []str
 			if err != nil {
 				return err
 			}
-			return plannerErr
+			if len(plan.Stages) == 0 {
+				return plannerErr
+			}
+			return nil
 		}
 
 		executor := r.NewPlanExecutor(plan).Finally(func(_ context.Context) error {
@@ -709,7 +718,10 @@ func newRunCommand(ctx context.Context, input *Input) func(*cobra.Command, []str
 		if err != nil {
 			return err
 		}
-		return plannerErr
+		if len(plan.Stages) == 0 {
+			return plannerErr
+		}
+		return nil
 	}
 }
 
