@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -122,4 +124,56 @@ func TestReadArgsFile(t *testing.T) {
 			assert.Equal(t, table.args, args)
 		})
 	}
+}
+
+// TestListWithPlannerError tests that --list exits with code 0 when some workflows
+// have planning errors (e.g. circular dependencies) but others are valid. Previously,
+// plannerErr was returned even when the list operation itself succeeded.
+func TestListWithPlannerError(t *testing.T) {
+	tmpDir := t.TempDir()
+	workflowDir := filepath.Join(tmpDir, ".github", "workflows")
+	err := os.MkdirAll(workflowDir, 0755)
+	assert.NoError(t, err)
+
+	// Write a valid workflow
+	validWorkflow := []byte(`name: valid
+on: push
+jobs:
+  job1:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hello
+`)
+	err = os.WriteFile(filepath.Join(workflowDir, "valid.yml"), validWorkflow, 0644)
+	assert.NoError(t, err)
+
+	// Write a workflow with circular dependency (triggers plannerErr in PlanEvent)
+	circularWorkflow := []byte(`name: circular
+on: push
+jobs:
+  job1:
+    runs-on: ubuntu-latest
+    needs: [job2]
+    steps:
+      - run: echo job1
+  job2:
+    runs-on: ubuntu-latest
+    needs: [job1]
+    steps:
+      - run: echo job2
+`)
+	err = os.WriteFile(filepath.Join(workflowDir, "circular.yml"), circularWorkflow, 0644)
+	assert.NoError(t, err)
+
+	rootCmd := createRootCommand(context.Background(), &Input{}, "")
+	err = rootCmd.Flags().Set("list", "true")
+	assert.NoError(t, err)
+	// Should return nil because the valid workflow was listed successfully,
+	// even though plannerErr is set for the circular workflow.
+	err = newRunCommand(context.Background(), &Input{
+		platforms:     []string{"ubuntu-latest=node:16-buster-slim"},
+		workdir:       tmpDir,
+		workflowsPath: workflowDir,
+	})(rootCmd, []string{"push"})
+	assert.NoError(t, err)
 }
