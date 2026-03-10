@@ -82,6 +82,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -244,7 +245,7 @@ func (r *artifactV4Routes) parseProtbufBody(ctx *ArtifactContext, req protorefle
 		ctx.Error(http.StatusInternalServerError, "Error decode request body")
 		return false
 	}
-	err = protojson.Unmarshal(body, req)
+	err = protojson.UnmarshalOptions{DiscardUnknown: true}.Unmarshal(body, req)
 	if err != nil {
 		log.Errorf("Error decode request body: %v", err)
 		ctx.Error(http.StatusInternalServerError, "Error decode request body")
@@ -265,12 +266,49 @@ func (r *artifactV4Routes) sendProtbufBody(ctx *ArtifactContext, req protoreflec
 	_, _ = ctx.Resp.Write(resp)
 }
 
-func (r *artifactV4Routes) createArtifact(ctx *ArtifactContext) {
-	var req CreateArtifactRequest
+// isZipMimeType returns true if the given MIME type corresponds to a ZIP archive.
+func isZipMimeType(mimeType string) bool {
+	switch mimeType {
+	case "application/zip", "application/x-zip-compressed", "application/zip-compressed":
+		return true
+	}
+	return false
+}
 
-	if ok := r.parseProtbufBody(ctx, &req); !ok {
+// artifactFileName returns the filename to use for storing the artifact.
+// For v7+ direct uploads (non-zip mimeType), the artifact is stored without the .zip extension.
+// For all other cases (v4 or v7+ archive uploads), .zip is appended.
+func artifactFileName(artifactName string, body []byte) string {
+	var mimeTypeJSON struct {
+		MimeType *struct {
+			Value string `json:"value"`
+		} `json:"mimeType"`
+	}
+	if err := json.Unmarshal(body, &mimeTypeJSON); err != nil {
+		log.Debugf("artifactFileName: could not parse mimeType from request body, defaulting to zip: %v", err)
+	}
+	if mimeTypeJSON.MimeType != nil && !isZipMimeType(mimeTypeJSON.MimeType.Value) {
+		return artifactName
+	}
+	return artifactName + ".zip"
+}
+
+func (r *artifactV4Routes) createArtifact(ctx *ArtifactContext) {
+	body, err := io.ReadAll(ctx.Req.Body)
+	if err != nil {
+		log.Errorf("Error decode request body: %v", err)
+		ctx.Error(http.StatusInternalServerError, "Error decode request body")
 		return
 	}
+
+	var req CreateArtifactRequest
+	err = protojson.UnmarshalOptions{DiscardUnknown: true}.Unmarshal(body, &req)
+	if err != nil {
+		log.Errorf("Error decode request body: %v", err)
+		ctx.Error(http.StatusInternalServerError, "Error decode request body")
+		return
+	}
+
 	_, runID, ok := validateRunIDV4(ctx, req.WorkflowRunBackendId)
 	if !ok {
 		return
@@ -279,8 +317,9 @@ func (r *artifactV4Routes) createArtifact(ctx *ArtifactContext) {
 	artifactName := req.Name
 
 	safeRunPath := safeResolve(r.baseDir, fmt.Sprint(runID))
-	safePath := safeResolve(safeRunPath, artifactName)
-	safePath = safeResolve(safePath, artifactName+".zip")
+	safeArtifactDir := safeResolve(safeRunPath, artifactName)
+	fileName := artifactFileName(artifactName, body)
+	safePath := safeResolve(safeArtifactDir, fileName)
 	file, err := r.fs.OpenWritable(safePath)
 
 	if err != nil {
@@ -306,8 +345,17 @@ func (r *artifactV4Routes) uploadArtifact(ctx *ArtifactContext) {
 	case "block", "appendBlock":
 
 		safeRunPath := safeResolve(r.baseDir, fmt.Sprint(task))
-		safePath := safeResolve(safeRunPath, artifactName)
-		safePath = safeResolve(safePath, artifactName+".zip")
+		safeArtifactDir := safeResolve(safeRunPath, artifactName)
+
+		// Determine whether the artifact was created as a zip or a raw file.
+		// createArtifact creates the file first; we check which variant exists.
+		zipPath := safeResolve(safeArtifactDir, artifactName+".zip")
+		rawPath := safeResolve(safeArtifactDir, artifactName)
+		safePath := rawPath
+		if f, err := r.rfs.Open(zipPath); err == nil {
+			f.Close()
+			safePath = zipPath
+		}
 
 		file, err := r.fs.OpenAppendable(safePath)
 
@@ -425,8 +473,20 @@ func (r *artifactV4Routes) downloadArtifact(ctx *ArtifactContext) {
 	}
 
 	safeRunPath := safeResolve(r.baseDir, fmt.Sprint(task))
-	safePath := safeResolve(safeRunPath, artifactName)
-	safePath = safeResolve(safePath, artifactName+".zip")
+	safeArtifactDir := safeResolve(safeRunPath, artifactName)
+
+	// Prefer the zip file (v4 and v7 archive uploads); fall back to raw file
+	// (v7 direct uploads where archive=false).
+	zipPath := safeResolve(safeArtifactDir, artifactName+".zip")
+	rawPath := safeResolve(safeArtifactDir, artifactName)
+	safePath := rawPath
+	if f, err := r.rfs.Open(zipPath); err == nil {
+		f.Close()
+		safePath = zipPath
+	} else {
+		// Raw (non-zip) artifact: tell the client what filename to use when saving.
+		ctx.Resp.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, artifactName))
+	}
 
 	file, _ := r.rfs.Open(safePath)
 

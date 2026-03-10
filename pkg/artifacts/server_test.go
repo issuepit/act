@@ -230,6 +230,108 @@ func TestDownloadArtifactFile(t *testing.T) {
 	assert.Equal("content", string(data))
 }
 
+// TestV7CreateArtifactDirectUpload verifies that a v7 CreateArtifact request
+// with a non-zip mimeType creates the artifact file without a .zip extension.
+func TestV7CreateArtifactDirectUpload(t *testing.T) {
+	assert := assert.New(t)
+
+	memfs := writeMapFS{fstest.MapFS(map[string]*fstest.MapFile{})}
+	router := httprouter.New()
+	RoutesV4(router, "artifact/server/path", memfs, memfs.MapFS)
+
+	body := strings.NewReader(`{"workflow_run_backend_id":"1","workflow_job_run_backend_id":"1","name":"myfile.txt","mimeType":{"value":"text/plain"},"version":7}`)
+	req, _ := http.NewRequest("POST", "http://localhost/twirp/github.actions.results.api.v1.ArtifactService/CreateArtifact", body)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(http.StatusOK, rr.Code)
+
+	var resp struct {
+		Ok              bool   `json:"ok"`
+		SignedUploadUrl string `json:"signedUploadUrl"`
+	}
+	assert.NoError(json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.True(resp.Ok)
+
+	// The raw file (no .zip) must have been created; the .zip must not exist.
+	assert.NotNil(memfs.MapFS["artifact/server/path/1/myfile.txt/myfile.txt"], "raw file should be created")
+	assert.Nil(memfs.MapFS["artifact/server/path/1/myfile.txt/myfile.txt.zip"], ".zip file must not be created for direct upload")
+}
+
+// TestV7UploadArtifactDirect verifies that uploading content to a v7 direct
+// artifact (archive=false) writes to the raw file path, not the .zip path.
+func TestV7UploadArtifactDirect(t *testing.T) {
+	assert := assert.New(t)
+
+	// Pre-create the artifact file (simulating what createArtifact does for v7).
+	memfs := writeMapFS{fstest.MapFS(map[string]*fstest.MapFile{
+		"artifact/server/path/1/myfile.txt/myfile.txt": {Data: []byte{}},
+	})}
+	router := httprouter.New()
+	RoutesV4(router, "artifact/server/path", memfs, memfs.MapFS)
+
+	// First call CreateArtifact to obtain a signed upload URL.
+	createBody := strings.NewReader(`{"workflow_run_backend_id":"1","workflow_job_run_backend_id":"1","name":"myfile.txt","mimeType":{"value":"text/plain"},"version":7}`)
+	createReq, _ := http.NewRequest("POST", "http://localhost/twirp/github.actions.results.api.v1.ArtifactService/CreateArtifact", createBody)
+	createRR := httptest.NewRecorder()
+	router.ServeHTTP(createRR, createReq)
+	assert.Equal(http.StatusOK, createRR.Code)
+
+	var createResp struct {
+		SignedUploadUrl string `json:"signedUploadUrl"`
+	}
+	assert.NoError(json.Unmarshal(createRR.Body.Bytes(), &createResp))
+
+	// Upload content using the signed URL with comp=block.
+	uploadURL := createResp.SignedUploadUrl + "&comp=block"
+	uploadReq, _ := http.NewRequest("PUT", uploadURL, strings.NewReader("hello world"))
+	uploadRR := httptest.NewRecorder()
+	router.ServeHTTP(uploadRR, uploadReq)
+	assert.Equal(http.StatusCreated, uploadRR.Code)
+
+	// The content must be stored in the raw file, not the .zip file.
+	assert.Equal("hello world", string(memfs.MapFS["artifact/server/path/1/myfile.txt/myfile.txt"].Data))
+	assert.Nil(memfs.MapFS["artifact/server/path/1/myfile.txt/myfile.txt.zip"], ".zip file must not be created for direct upload")
+}
+
+// TestV7DownloadArtifactDirect verifies that downloading a v7 direct artifact
+// returns the raw file content and sets the Content-Disposition header.
+func TestV7DownloadArtifactDirect(t *testing.T) {
+	assert := assert.New(t)
+
+	// Pre-create the raw artifact file (no .zip) as would be done by v7 direct upload.
+	memfs := writeMapFS{fstest.MapFS(map[string]*fstest.MapFile{
+		"artifact/server/path/1/myfile.txt/myfile.txt": {Data: []byte("file content")},
+	})}
+	router := httprouter.New()
+	RoutesV4(router, "artifact/server/path", memfs, memfs.MapFS)
+
+	// Call GetSignedArtifactURL to get a signed download URL.
+	signedURLBody := strings.NewReader(`{"workflow_run_backend_id":"1","workflow_job_run_backend_id":"1","name":"myfile.txt"}`)
+	signedReq, _ := http.NewRequest("POST", "http://localhost/twirp/github.actions.results.api.v1.ArtifactService/GetSignedArtifactURL", signedURLBody)
+	signedRR := httptest.NewRecorder()
+	router.ServeHTTP(signedRR, signedReq)
+	assert.Equal(http.StatusOK, signedRR.Code)
+
+	var signedResp struct {
+		SignedUrl string `json:"signedUrl"`
+	}
+	assert.NoError(json.Unmarshal(signedRR.Body.Bytes(), &signedResp))
+
+	// Download using the signed URL.
+	downloadReq, _ := http.NewRequest("GET", signedResp.SignedUrl, nil)
+	downloadRR := httptest.NewRecorder()
+	router.ServeHTTP(downloadRR, downloadReq)
+	assert.Equal(http.StatusOK, downloadRR.Code)
+
+	// The response must carry Content-Disposition so the client knows the filename.
+	contentDisposition := downloadRR.Header().Get("Content-Disposition")
+	assert.Contains(contentDisposition, "myfile.txt", "Content-Disposition should contain the artifact name")
+
+	// The raw file content must be served as-is.
+	assert.Equal("file content", downloadRR.Body.String())
+}
+
 type TestJobFileInfo struct {
 	workdir               string
 	workflowPath          string
