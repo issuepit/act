@@ -62,6 +62,8 @@ type Config struct {
 	ContainerNetworkMode               docker_container.NetworkMode // the network mode of job containers (the value of --network)
 	ActionCache                        ActionCache                  // Use a custom ActionCache Implementation
 	ConcurrentJobs                     int                          // Number of max concurrent jobs
+	ContainerNamePrefix                string                       // Prefix to be added to the front of container names
+	ContainerNameSuffix                string                       // Suffix to be appended to the end of container names
 }
 
 func (config *Config) GetConcurrentJobs() int {

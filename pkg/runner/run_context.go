@@ -90,7 +90,14 @@ func (rc *RunContext) GetEnv() map[string]string {
 }
 
 func (rc *RunContext) jobContainerName() string {
-	return createContainerName("act", rc.String())
+	parts := []string{"act", rc.String()}
+	if rc.Config.ContainerNamePrefix != "" {
+		parts = append([]string{rc.Config.ContainerNamePrefix}, parts...)
+	}
+	if rc.Config.ContainerNameSuffix != "" {
+		parts = append(parts, rc.Config.ContainerNameSuffix)
+	}
+	return createContainerName(parts...)
 }
 
 // networkName return the name of the network which will be created by `act` automatically for job,
