@@ -42,6 +42,8 @@ Let's see it in action with a [sample repo](https://github.com/cplee/github-acti
 | `--container-cap-add` | | | `stringArray` | kernel capabilities to add to the workflow containers (e.g. `--container-cap-add SYS_PTRACE`) |
 | `--container-cap-drop` | | | `stringArray` | kernel capabilities to remove from the workflow containers (e.g. `--container-cap-drop SYS_PTRACE`) |
 | `--container-daemon-socket` | | | `string` | URI to Docker Engine socket (e.g.: `unix://~/.docker/run/docker.sock` or `-` to disable bind mounting the socket) |
+| `--container-name-prefix` | | | `string` | Prefix to be added to the front of container names |
+| `--container-name-suffix` | | | `string` | Suffix to be appended to the end of container names |
 | `--container-options` | | | `string` | Custom docker container options for the job container without an options property in the job definition |
 | `--defaultbranch` | | | `string` | the name of the main branch |
 | `--detect-event` | | `false` | `bool` | Use first event type from workflow as event that triggered the workflow |
