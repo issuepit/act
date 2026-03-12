@@ -65,6 +65,8 @@ type Input struct {
 	validate                           bool
 	strict                             bool
 	concurrentJobs                     int
+	containerNamePrefix                string
+	containerNameSuffix                string
 }
 
 func (i *Input) resolve(path string) string {

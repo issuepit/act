@@ -248,7 +248,7 @@ func TestV7CreateArtifactDirectUpload(t *testing.T) {
 
 	var resp struct {
 		Ok              bool   `json:"ok"`
-		SignedUploadUrl string `json:"signedUploadUrl"`
+		SignedUploadURL string `json:"signedUploadUrl"`
 	}
 	assert.NoError(json.Unmarshal(rr.Body.Bytes(), &resp))
 	assert.True(resp.Ok)
@@ -278,12 +278,12 @@ func TestV7UploadArtifactDirect(t *testing.T) {
 	assert.Equal(http.StatusOK, createRR.Code)
 
 	var createResp struct {
-		SignedUploadUrl string `json:"signedUploadUrl"`
+		SignedUploadURL string `json:"signedUploadUrl"`
 	}
 	assert.NoError(json.Unmarshal(createRR.Body.Bytes(), &createResp))
 
 	// Upload content using the signed URL with comp=block.
-	uploadURL := createResp.SignedUploadUrl + "&comp=block"
+	uploadURL := createResp.SignedUploadURL + "&comp=block"
 	uploadReq, _ := http.NewRequest("PUT", uploadURL, strings.NewReader("hello world"))
 	uploadRR := httptest.NewRecorder()
 	router.ServeHTTP(uploadRR, uploadReq)
@@ -314,12 +314,12 @@ func TestV7DownloadArtifactDirect(t *testing.T) {
 	assert.Equal(http.StatusOK, signedRR.Code)
 
 	var signedResp struct {
-		SignedUrl string `json:"signedUrl"`
+		SignedURL string `json:"signedUrl"`
 	}
 	assert.NoError(json.Unmarshal(signedRR.Body.Bytes(), &signedResp))
 
 	// Download using the signed URL.
-	downloadReq, _ := http.NewRequest("GET", signedResp.SignedUrl, nil)
+	downloadReq, _ := http.NewRequest("GET", signedResp.SignedURL, nil)
 	downloadRR := httptest.NewRecorder()
 	router.ServeHTTP(downloadRR, downloadReq)
 	assert.Equal(http.StatusOK, downloadRR.Code)

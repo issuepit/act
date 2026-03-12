@@ -726,3 +726,48 @@ func TestSetRuntimeVariablesWithRunID(t *testing.T) {
 	assert.True(t, ok, "scp claim exists")
 	assert.Equal(t, "Actions.Results:45:45", scp, "contains expected scp claim")
 }
+
+func TestJobContainerName(t *testing.T) {
+	newRC := func(prefix, suffix string) *RunContext {
+		return &RunContext{
+			Name: "myjob",
+			Config: &Config{
+				ContainerNamePrefix: prefix,
+				ContainerNameSuffix: suffix,
+			},
+			Run: &model.Run{
+				JobID: "job1",
+				Workflow: &model.Workflow{
+					Name: "myworkflow",
+					Jobs: map[string]*model.Job{
+						"job1": {},
+					},
+				},
+			},
+		}
+	}
+
+	// Without prefix/suffix the name should match the baseline
+	baseline := newRC("", "").jobContainerName()
+	assert.NotEmpty(t, baseline)
+	// Names must only contain alphanumerics and dashes (Docker naming rules)
+	validName := regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
+	assert.Regexp(t, validName, baseline)
+
+	// With a prefix the container name must start with the prefix
+	withPrefix := newRC("myprefix", "").jobContainerName()
+	assert.True(t, strings.HasPrefix(withPrefix, "myprefix-"), "container name should start with prefix: %s", withPrefix)
+	assert.NotEqual(t, baseline, withPrefix)
+
+	// With a suffix the container name must contain the suffix before the hash
+	withSuffix := newRC("", "mysuffix").jobContainerName()
+	assert.Contains(t, withSuffix, "mysuffix", "container name should contain suffix: %s", withSuffix)
+	assert.NotEqual(t, baseline, withSuffix)
+
+	// With both prefix and suffix, both constraints apply
+	withBoth := newRC("myprefix", "mysuffix").jobContainerName()
+	assert.True(t, strings.HasPrefix(withBoth, "myprefix-"), "container name should start with prefix: %s", withBoth)
+	assert.NotEqual(t, baseline, withBoth)
+	assert.NotEqual(t, withPrefix, withBoth)
+	assert.NotEqual(t, withSuffix, withBoth)
+}
