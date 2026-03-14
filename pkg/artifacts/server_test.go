@@ -361,9 +361,9 @@ func TestArtifactFlow(t *testing.T) {
 		"ubuntu-latest": "node:16-buster", // Don't use node:16-buster-slim because it doesn't have curl command, which is used in the tests
 	}
 
-	// actions/upload-artifact@v7 uses node24; use a node20 image which can run node24-compiled bundles
-	platformsNode20 := map[string]string{
-		"ubuntu-latest": "node:20-bookworm",
+	// actions/upload-artifact@v7 and actions/download-artifact@v7 require Node.js >= 24
+	platformsNode24 := map[string]string{
+		"ubuntu-latest": "node:24-bookworm",
 	}
 
 	tables := []TestJobFileInfo{
@@ -371,7 +371,7 @@ func TestArtifactFlow(t *testing.T) {
 		{"testdata", "GHSL-2023-004", "push", "", platforms, ""},
 		{"testdata", "v4", "push", "", platforms, ""},
 		{"testdata", "v7", "push", "", platforms, ""},
-		{"testdata", "v7-action", "push", "", platformsNode20, ""},
+		{"testdata", "v7-action", "push", "", platformsNode24, ""},
 	}
 	log.SetLevel(log.DebugLevel)
 

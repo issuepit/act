@@ -31,8 +31,10 @@ jobs:
           path: data.txt
           archive: false
 
+      # download-artifact@v8 uses @actions/artifact v6+ which understands direct (non-zip) uploads.
+      # download-artifact@v7 only supports @actions/artifact v5 (pre-direct-upload), so v8 is needed here.
       - name: Download artifact (direct mode)
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: data.txt
           path: out-direct
