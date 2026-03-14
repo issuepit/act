@@ -41,5 +41,7 @@ jobs:
 
       - name: Assert direct round-trip
         run: |
-          [[ "$(cat data.txt)" = "$(cat out-direct/data.txt)" ]] || exit 1
+          # download-artifact@v8 saves the raw file as "artifact" (default) when no
+          # Content-Disposition filename is parsed; verify the content is correct.
+          [[ "$(cat data.txt)" = "$(cat out-direct/artifact)" ]] || exit 1
         shell: bash
