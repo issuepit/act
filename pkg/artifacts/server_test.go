@@ -365,6 +365,7 @@ func TestArtifactFlow(t *testing.T) {
 		{"testdata", "upload-and-download", "push", "", platforms, ""},
 		{"testdata", "GHSL-2023-004", "push", "", platforms, ""},
 		{"testdata", "v4", "push", "", platforms, ""},
+		{"testdata", "v7", "push", "", platforms, ""},
 	}
 	log.SetLevel(log.DebugLevel)
 
