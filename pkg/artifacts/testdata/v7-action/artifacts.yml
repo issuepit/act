@@ -1,0 +1,43 @@
+on:
+  push:
+jobs:
+  v7-action:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "hello v7 action upload" > data.txt
+
+      - name: Upload artifact (archive mode, default)
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-archive
+          path: data.txt
+
+      - name: Download artifact (archive mode)
+        uses: actions/download-artifact@v7
+        with:
+          name: test-archive
+          path: out-archive
+
+      - name: Assert archive round-trip
+        run: |
+          [[ "$(cat data.txt)" = "$(cat out-archive/data.txt)" ]] || exit 1
+        shell: bash
+
+      - name: Upload artifact (direct mode, archive=false)
+        uses: actions/upload-artifact@v7
+        with:
+          # When archive=false, the filename is used as the artifact name (ignoring the `name` input).
+          # So uploading data.txt creates an artifact named "data.txt".
+          path: data.txt
+          archive: false
+
+      - name: Download artifact (direct mode)
+        uses: actions/download-artifact@v7
+        with:
+          name: data.txt
+          path: out-direct
+
+      - name: Assert direct round-trip
+        run: |
+          [[ "$(cat data.txt)" = "$(cat out-direct/data.txt)" ]] || exit 1
+        shell: bash
