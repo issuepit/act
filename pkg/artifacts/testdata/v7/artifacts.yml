@@ -1,0 +1,49 @@
+on:
+  push:
+jobs:
+  v7:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create test file
+        run: echo "hello v7 direct upload" > test.txt
+
+      - name: Upload and download artifact via v7 API (direct upload)
+        run: |
+          # CreateArtifact with version=7 and a non-zip mimeType (direct / non-archive upload)
+          BODY=$(printf '{"workflow_run_backend_id":"%s","workflow_job_run_backend_id":"%s","name":"test-direct","version":7,"mimeType":{"value":"text/plain"}}' "$GITHUB_RUN_ID" "$GITHUB_RUN_ID")
+          RESPONSE=$(curl --silent --show-error --fail \
+            -X POST \
+            -H "Content-Type: application/json" \
+            "${ACTIONS_RESULTS_URL}twirp/github.actions.results.api.v1.ArtifactService/CreateArtifact" \
+            -d "$BODY")
+          echo "CreateArtifact response: $RESPONSE"
+          UPLOAD_URL=$(echo "$RESPONSE" | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).signedUploadUrl))")
+
+          # Upload file content (comp=block then comp=blockList)
+          curl --silent --show-error --fail -X PUT --data-binary @test.txt "${UPLOAD_URL}&comp=block"
+          curl --silent --show-error --fail -X PUT "${UPLOAD_URL}&comp=blockList"
+
+          # FinalizeArtifact
+          BODY=$(printf '{"workflow_run_backend_id":"%s","workflow_job_run_backend_id":"%s","name":"test-direct"}' "$GITHUB_RUN_ID" "$GITHUB_RUN_ID")
+          curl --silent --show-error --fail \
+            -X POST \
+            -H "Content-Type: application/json" \
+            "${ACTIONS_RESULTS_URL}twirp/github.actions.results.api.v1.ArtifactService/FinalizeArtifact" \
+            -d "$BODY"
+
+          # GetSignedArtifactURL
+          BODY=$(printf '{"workflow_run_backend_id":"%s","workflow_job_run_backend_id":"%s","name":"test-direct"}' "$GITHUB_RUN_ID" "$GITHUB_RUN_ID")
+          RESPONSE=$(curl --silent --show-error --fail \
+            -X POST \
+            -H "Content-Type: application/json" \
+            "${ACTIONS_RESULTS_URL}twirp/github.actions.results.api.v1.ArtifactService/GetSignedArtifactURL" \
+            -d "$BODY")
+          echo "GetSignedArtifactURL response: $RESPONSE"
+          DOWNLOAD_URL=$(echo "$RESPONSE" | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).signedUrl))")
+
+          # Download the artifact
+          curl --silent --show-error --fail -o test-direct-out.txt "$DOWNLOAD_URL"
+
+          # Verify the downloaded content matches the original
+          diff test.txt test-direct-out.txt
+        shell: bash
