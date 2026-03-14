@@ -212,6 +212,7 @@ func (r artifactV4Routes) buildArtifactURL(endp, artifactName string, taskID int
 	expires := time.Now().Add(60 * time.Minute).Format("2006-01-02 15:04:05.999999999 -0700 MST")
 	uploadURL := "http://" + strings.TrimSuffix(r.AppURL, "/") + strings.TrimSuffix(r.prefix, "/") +
 		"/" + endp + "?sig=" + base64.URLEncoding.EncodeToString(r.buildSignature(endp, expires, artifactName, taskID)) + "&expires=" + url.QueryEscape(expires) + "&artifactName=" + url.QueryEscape(artifactName) + "&taskID=" + fmt.Sprint(taskID)
+	log.Debugf("buildArtifactURL: endp=%q artifactName=%q taskID=%d expires=%q url=%s", endp, artifactName, taskID, expires, uploadURL)
 	return uploadURL
 }
 
@@ -225,6 +226,8 @@ func (r artifactV4Routes) verifySignature(ctx *ArtifactContext, endp string) (in
 
 	expecedsig := r.buildSignature(endp, expires, artifactName, taskID)
 	if !hmac.Equal(dsig, expecedsig) {
+		log.Debugf("verifySignature: HMAC mismatch for endp=%q sig=%q expires=%q artifactName=%q taskID=%q rawURL=%s",
+			endp, sig, expires, artifactName, rawTaskID, ctx.Req.URL.RawQuery)
 		log.Error("Error unauthorized")
 		ctx.Error(http.StatusUnauthorized, "Error unauthorized")
 		return -1, "", false
