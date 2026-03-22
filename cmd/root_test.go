@@ -123,3 +123,21 @@ func TestReadArgsFile(t *testing.T) {
 		})
 	}
 }
+
+func TestSkipStepFlagRegistered(t *testing.T) {
+	rootCmd := createRootCommand(context.Background(), &Input{}, "")
+	f := rootCmd.Flags().Lookup("skip-step")
+	assert.NotNil(t, f, "--skip-step flag should be registered")
+	assert.Equal(t, "[]", f.DefValue)
+}
+
+func TestRunWithSkipStep(t *testing.T) {
+	rootCmd := createRootCommand(context.Background(), &Input{}, "")
+	err := newRunCommand(context.Background(), &Input{
+		platforms:     []string{"ubuntu-latest=node:16-buster-slim"},
+		workdir:       "../pkg/runner/testdata/",
+		workflowsPath: "./skip-step/push.yml",
+		skipSteps:     []string{"skipped-step"},
+	})(rootCmd, []string{})
+	assert.NoError(t, err)
+}

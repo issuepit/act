@@ -805,3 +805,37 @@ func TestRunMatrixWithUserDefinedInclusions(t *testing.T) {
 
 	tjfi.runTest(context.Background(), t, &Config{Matrix: matrix})
 }
+
+func TestRunSkipStep(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := context.Background()
+	workflowPath := filepath.Join(workdir, "skip-step", "push.yml")
+
+	runnerConfig := &Config{
+		Workdir:         workdir,
+		BindWorkdir:     false,
+		EventName:       "push",
+		Platforms:       platforms,
+		ReuseContainers: false,
+		GitHubInstance:  "github.com",
+		SkipSteps:       []string{"skipped-step"},
+	}
+
+	runner, err := New(runnerConfig)
+	assert.Nil(t, err, workflowPath)
+
+	planner, err := model.NewWorkflowPlanner(workflowPath, true, false)
+	assert.Nil(t, err, workflowPath)
+
+	plan, err := planner.PlanEvent("push")
+	assert.Nil(t, err, workflowPath)
+	assert.NotNil(t, plan)
+
+	// The workflow has a step with id "skipped-step" that runs "exit 1".
+	// By skipping it, the workflow should succeed.
+	err = runner.NewPlanExecutor(plan)(ctx)
+	assert.Nil(t, err, workflowPath)
+}
