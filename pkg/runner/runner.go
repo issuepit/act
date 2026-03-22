@@ -64,6 +64,7 @@ type Config struct {
 	ConcurrentJobs                     int                          // Number of max concurrent jobs
 	ContainerNamePrefix                string                       // Prefix to be added to the front of container names
 	ContainerNameSuffix                string                       // Suffix to be appended to the end of container names
+	SkipSteps                          []string                     // list of steps to skip (format: step-id-or-name or job-id:step-id-or-name)
 }
 
 func (config *Config) GetConcurrentJobs() int {
