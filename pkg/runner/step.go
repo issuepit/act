@@ -341,11 +341,9 @@ func isStepSkipped(rc *RunContext, stepModel *model.Step) bool {
 			if stepModel.ID == stepFilter || stepModel.Name == stepFilter {
 				return true
 			}
-		} else {
+		} else if stepModel.ID == jobFilter || stepModel.Name == jobFilter {
 			// format: "step-id-or-name" (matches any job)
-			if stepModel.ID == jobFilter || stepModel.Name == jobFilter {
-				return true
-			}
+			return true
 		}
 	}
 	return false
