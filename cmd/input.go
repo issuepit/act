@@ -67,6 +67,7 @@ type Input struct {
 	concurrentJobs                     int
 	containerNamePrefix                string
 	containerNameSuffix                string
+	skipSteps                          []string
 }
 
 func (i *Input) resolve(path string) string {

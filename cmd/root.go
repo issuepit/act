@@ -132,6 +132,7 @@ func createRootCommand(ctx context.Context, input *Input, version string) *cobra
 	rootCmd.PersistentFlags().IntVar(&input.concurrentJobs, "concurrent-jobs", 0, "Maximum number of concurrent jobs to run. Default is the number of CPUs available.")
 	rootCmd.PersistentFlags().StringVar(&input.containerNamePrefix, "container-name-prefix", "", "Prefix to be added to the front of container names")
 	rootCmd.PersistentFlags().StringVar(&input.containerNameSuffix, "container-name-suffix", "", "Suffix to be appended to the end of container names")
+	rootCmd.Flags().StringArrayVar(&input.skipSteps, "skip-step", []string{}, "skip a specific step by name or id (e.g. --skip-step my-step or --skip-step my-job:my-step)")
 	rootCmd.SetArgs(args())
 	return rootCmd
 }
@@ -649,6 +650,7 @@ func newRunCommand(ctx context.Context, input *Input) func(*cobra.Command, []str
 			ConcurrentJobs:                     input.concurrentJobs,
 			ContainerNamePrefix:                input.containerNamePrefix,
 			ContainerNameSuffix:                input.containerNameSuffix,
+			SkipSteps:                          input.skipSteps,
 		}
 		if input.useNewActionCache || len(input.localRepository) > 0 {
 			if input.actionOfflineMode {

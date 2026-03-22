@@ -276,6 +276,72 @@ func TestIsStepEnabled(t *testing.T) {
 	assertObject.True(isStepEnabled(context.Background(), step.getStepModel().If.Value, step, stepStageMain))
 }
 
+func TestIsStepSkipped(t *testing.T) {
+	createRC := func(jobID string, skipSteps []string) *RunContext {
+		return &RunContext{
+			Config: &Config{
+				SkipSteps: skipSteps,
+			},
+			Run: &model.Run{
+				JobID: jobID,
+				Workflow: &model.Workflow{
+					Jobs: map[string]*model.Job{
+						jobID: {},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("no skip steps configured", func(t *testing.T) {
+		rc := createRC("job1", nil)
+		step := &model.Step{ID: "my-step", Name: "My Step"}
+		assert.False(t, isStepSkipped(rc, step))
+	})
+
+	t.Run("skip by step ID in any job", func(t *testing.T) {
+		rc := createRC("job1", []string{"my-step"})
+		step := &model.Step{ID: "my-step", Name: "My Step"}
+		assert.True(t, isStepSkipped(rc, step))
+	})
+
+	t.Run("skip by step name in any job", func(t *testing.T) {
+		rc := createRC("job1", []string{"My Step"})
+		step := &model.Step{ID: "my-step", Name: "My Step"}
+		assert.True(t, isStepSkipped(rc, step))
+	})
+
+	t.Run("skip by job:step ID", func(t *testing.T) {
+		rc := createRC("job1", []string{"job1:my-step"})
+		step := &model.Step{ID: "my-step", Name: "My Step"}
+		assert.True(t, isStepSkipped(rc, step))
+	})
+
+	t.Run("skip by job:step name", func(t *testing.T) {
+		rc := createRC("job1", []string{"job1:My Step"})
+		step := &model.Step{ID: "my-step", Name: "My Step"}
+		assert.True(t, isStepSkipped(rc, step))
+	})
+
+	t.Run("job filter does not match other jobs", func(t *testing.T) {
+		rc := createRC("job2", []string{"job1:my-step"})
+		step := &model.Step{ID: "my-step", Name: "My Step"}
+		assert.False(t, isStepSkipped(rc, step))
+	})
+
+	t.Run("step filter does not match different step", func(t *testing.T) {
+		rc := createRC("job1", []string{"other-step"})
+		step := &model.Step{ID: "my-step", Name: "My Step"}
+		assert.False(t, isStepSkipped(rc, step))
+	})
+
+	t.Run("multiple skip entries - matches one", func(t *testing.T) {
+		rc := createRC("job1", []string{"other-step", "my-step"})
+		step := &model.Step{ID: "my-step", Name: "My Step"}
+		assert.True(t, isStepSkipped(rc, step))
+	})
+}
+
 func TestIsContinueOnError(t *testing.T) {
 	createTestStep := func(t *testing.T, input string) step {
 		var step *model.Step

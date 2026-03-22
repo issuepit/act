@@ -131,6 +131,13 @@ func runStepExecutor(step step, stage stepStage, executor common.Executor) commo
 			return nil
 		}
 
+		if isStepSkipped(rc, stepModel) {
+			stepResult.Conclusion = model.StepStatusSkipped
+			stepResult.Outcome = model.StepStatusSkipped
+			logger.WithField("stepResult", stepResult.Outcome).Infof("Skipping step '%s' due to '--skip-step' option", stepModel)
+			return nil
+		}
+
 		stepString := rc.ExprEval.Interpolate(ctx, stepModel.String())
 		if strings.Contains(stepString, "::add-mask::") {
 			stepString = "add-mask command"
@@ -310,6 +317,38 @@ func isStepEnabled(ctx context.Context, expr string, step step, stage stepStage)
 	}
 
 	return runStep, nil
+}
+
+// isStepSkipped returns true if the step should be skipped based on the SkipSteps config.
+// Each entry in SkipSteps can be:
+//   - "step-id-or-name" to skip a step by its id or name in any job
+//   - "job-id:step-id-or-name" to skip a step only within a specific job
+func isStepSkipped(rc *RunContext, stepModel *model.Step) bool {
+	if len(rc.Config.SkipSteps) == 0 {
+		return false
+	}
+	jobID := ""
+	if rc.Run != nil {
+		jobID = rc.Run.JobID
+	}
+	for _, skipEntry := range rc.Config.SkipSteps {
+		jobFilter, stepFilter, hasJobFilter := strings.Cut(skipEntry, ":")
+		if hasJobFilter {
+			// format: "job-id:step-id-or-name"
+			if jobID != jobFilter {
+				continue
+			}
+			if stepModel.ID == stepFilter || stepModel.Name == stepFilter {
+				return true
+			}
+		} else {
+			// format: "step-id-or-name" (matches any job)
+			if stepModel.ID == jobFilter || stepModel.Name == jobFilter {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func isContinueOnError(ctx context.Context, expr string, step step, _ stepStage) (bool, error) {
