@@ -30,6 +30,9 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 		if len(info.matrix()) > 0 {
 			logger.Infof("\U0001F9EA  Matrix: %v", info.matrix())
 		}
+		if len(rc.Config.SkipSteps) > 0 {
+			logger.Infof("\u23ED\uFE0F  Skipping steps configured via '--skip-step': %v", rc.Config.SkipSteps)
+		}
 		return nil
 	})
 
