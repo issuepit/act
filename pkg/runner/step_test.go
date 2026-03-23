@@ -296,49 +296,73 @@ func TestIsStepSkipped(t *testing.T) {
 	t.Run("no skip steps configured", func(t *testing.T) {
 		rc := createRC("job1", nil)
 		step := &model.Step{ID: "my-step", Name: "My Step"}
-		assert.False(t, isStepSkipped(rc, step))
+		assert.False(t, isStepSkipped(rc, step, stepStageMain))
 	})
 
 	t.Run("skip by step ID in any job", func(t *testing.T) {
 		rc := createRC("job1", []string{"my-step"})
 		step := &model.Step{ID: "my-step", Name: "My Step"}
-		assert.True(t, isStepSkipped(rc, step))
+		assert.True(t, isStepSkipped(rc, step, stepStageMain))
 	})
 
 	t.Run("skip by step name in any job", func(t *testing.T) {
 		rc := createRC("job1", []string{"My Step"})
 		step := &model.Step{ID: "my-step", Name: "My Step"}
-		assert.True(t, isStepSkipped(rc, step))
+		assert.True(t, isStepSkipped(rc, step, stepStageMain))
 	})
 
 	t.Run("skip by job:step ID", func(t *testing.T) {
 		rc := createRC("job1", []string{"job1:my-step"})
 		step := &model.Step{ID: "my-step", Name: "My Step"}
-		assert.True(t, isStepSkipped(rc, step))
+		assert.True(t, isStepSkipped(rc, step, stepStageMain))
 	})
 
 	t.Run("skip by job:step name", func(t *testing.T) {
 		rc := createRC("job1", []string{"job1:My Step"})
 		step := &model.Step{ID: "my-step", Name: "My Step"}
-		assert.True(t, isStepSkipped(rc, step))
+		assert.True(t, isStepSkipped(rc, step, stepStageMain))
 	})
 
 	t.Run("job filter does not match other jobs", func(t *testing.T) {
 		rc := createRC("job2", []string{"job1:my-step"})
 		step := &model.Step{ID: "my-step", Name: "My Step"}
-		assert.False(t, isStepSkipped(rc, step))
+		assert.False(t, isStepSkipped(rc, step, stepStageMain))
 	})
 
 	t.Run("step filter does not match different step", func(t *testing.T) {
 		rc := createRC("job1", []string{"other-step"})
 		step := &model.Step{ID: "my-step", Name: "My Step"}
-		assert.False(t, isStepSkipped(rc, step))
+		assert.False(t, isStepSkipped(rc, step, stepStageMain))
 	})
 
 	t.Run("multiple skip entries - matches one", func(t *testing.T) {
 		rc := createRC("job1", []string{"other-step", "my-step"})
 		step := &model.Step{ID: "my-step", Name: "My Step"}
-		assert.True(t, isStepSkipped(rc, step))
+		assert.True(t, isStepSkipped(rc, step, stepStageMain))
+	})
+
+	t.Run("skip by stage-prefixed step name in any job", func(t *testing.T) {
+		rc := createRC("job1", []string{"Main My Step"})
+		step := &model.Step{ID: "my-step", Name: "My Step"}
+		assert.True(t, isStepSkipped(rc, step, stepStageMain))
+	})
+
+	t.Run("skip by stage-prefixed step name does not match wrong stage", func(t *testing.T) {
+		rc := createRC("job1", []string{"Pre My Step"})
+		step := &model.Step{ID: "my-step", Name: "My Step"}
+		assert.False(t, isStepSkipped(rc, step, stepStageMain))
+	})
+
+	t.Run("skip by job:stage-prefixed step name", func(t *testing.T) {
+		rc := createRC("build", []string{"build:Main Setup Pages"})
+		step := &model.Step{ID: "setup-pages", Name: "Setup Pages"}
+		assert.True(t, isStepSkipped(rc, step, stepStageMain))
+	})
+
+	t.Run("skip by stage-prefixed step ID in any job", func(t *testing.T) {
+		rc := createRC("job1", []string{"Main my-step"})
+		step := &model.Step{ID: "my-step", Name: "My Step"}
+		assert.True(t, isStepSkipped(rc, step, stepStageMain))
 	})
 }
 

@@ -131,10 +131,11 @@ func runStepExecutor(step step, stage stepStage, executor common.Executor) commo
 			return nil
 		}
 
-		if isStepSkipped(rc, stepModel) {
+		if isStepSkipped(rc, stepModel, stage) {
 			stepResult.Conclusion = model.StepStatusSkipped
 			stepResult.Outcome = model.StepStatusSkipped
-			logger.WithField("stepResult", stepResult.Outcome).Infof("Skipping step '%s' due to '--skip-step' option", stepModel)
+			stepString := rc.ExprEval.Interpolate(ctx, stepModel.String())
+			logger.WithField("stepResult", stepResult.Outcome).Infof("\u23ED\uFE0F  Skipping %s %s", stage, stepString)
 			return nil
 		}
 
@@ -323,7 +324,10 @@ func isStepEnabled(ctx context.Context, expr string, step step, stage stepStage)
 // Each entry in SkipSteps can be:
 //   - "step-id-or-name" to skip a step by its id or name in any job
 //   - "job-id:step-id-or-name" to skip a step only within a specific job
-func isStepSkipped(rc *RunContext, stepModel *model.Step) bool {
+//
+// Both forms support an optional stage prefix (e.g. "Main Setup Pages" matches a
+// step named "Setup Pages" running in the "Main" stage).
+func isStepSkipped(rc *RunContext, stepModel *model.Step, stage stepStage) bool {
 	if len(rc.Config.SkipSteps) == 0 {
 		return false
 	}
@@ -331,18 +335,40 @@ func isStepSkipped(rc *RunContext, stepModel *model.Step) bool {
 	if rc.Run != nil {
 		jobID = rc.Run.JobID
 	}
+	stageName := stage.String()
 	for _, skipEntry := range rc.Config.SkipSteps {
 		jobFilter, stepFilter, hasJobFilter := strings.Cut(skipEntry, ":")
+		var filterToMatch string
 		if hasJobFilter {
 			// format: "job-id:step-id-or-name"
 			if jobID != jobFilter {
 				continue
 			}
-			if stepModel.ID == stepFilter || stepModel.Name == stepFilter {
-				return true
-			}
-		} else if stepModel.ID == jobFilter || stepModel.Name == jobFilter {
+			filterToMatch = stepFilter
+		} else {
 			// format: "step-id-or-name" (matches any job)
+			filterToMatch = jobFilter
+		}
+		if matchesStep(stepModel, stageName, filterToMatch) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesStep returns true when filterToMatch identifies the given step.
+// It checks the raw step ID and name, as well as versions prefixed with the
+// stage name (e.g. "Main Setup Pages" for stage "Main" and name "Setup Pages").
+func matchesStep(stepModel *model.Step, stageName, filterToMatch string) bool {
+	if stepModel.ID == filterToMatch || stepModel.Name == filterToMatch {
+		return true
+	}
+	// Also accept filters that include the stage prefix as shown in the log output,
+	// e.g. "Main Setup Pages" where "Main" is the stage and "Setup Pages" is the step name.
+	stagePrefix := stageName + " "
+	if strings.HasPrefix(filterToMatch, stagePrefix) {
+		nameWithoutStage := filterToMatch[len(stagePrefix):]
+		if stepModel.ID == nameWithoutStage || stepModel.Name == nameWithoutStage {
 			return true
 		}
 	}
