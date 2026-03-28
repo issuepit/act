@@ -357,10 +357,10 @@ func isStepSkipped(rc *RunContext, stepModel *model.Step, stage stepStage) bool 
 }
 
 // matchesStep returns true when filterToMatch identifies the given step.
-// It checks the raw step ID and name, as well as versions prefixed with the
+// It checks the raw step ID, name, and uses value, as well as versions prefixed with the
 // stage name (e.g. "Main Setup Pages" for stage "Main" and name "Setup Pages").
 func matchesStep(stepModel *model.Step, stageName, filterToMatch string) bool {
-	if stepModel.ID == filterToMatch || stepModel.Name == filterToMatch {
+	if stepModel.ID == filterToMatch || stepModel.Name == filterToMatch || stepModel.Uses == filterToMatch {
 		return true
 	}
 	// Also accept filters that include the stage prefix as shown in the log output,
@@ -368,7 +368,7 @@ func matchesStep(stepModel *model.Step, stageName, filterToMatch string) bool {
 	stagePrefix := stageName + " "
 	if strings.HasPrefix(filterToMatch, stagePrefix) {
 		nameWithoutStage := filterToMatch[len(stagePrefix):]
-		if stepModel.ID == nameWithoutStage || stepModel.Name == nameWithoutStage {
+		if stepModel.ID == nameWithoutStage || stepModel.Name == nameWithoutStage || stepModel.Uses == nameWithoutStage {
 			return true
 		}
 	}
