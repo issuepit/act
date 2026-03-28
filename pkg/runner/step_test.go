@@ -364,6 +364,30 @@ func TestIsStepSkipped(t *testing.T) {
 		step := &model.Step{ID: "my-step", Name: "My Step"}
 		assert.True(t, isStepSkipped(rc, step, stepStageMain))
 	})
+
+	t.Run("skip by uses value in any job", func(t *testing.T) {
+		rc := createRC("job1", []string{"actions/checkout@v4"})
+		step := &model.Step{ID: "checkout", Uses: "actions/checkout@v4"}
+		assert.True(t, isStepSkipped(rc, step, stepStageMain))
+	})
+
+	t.Run("skip by stage-prefixed uses value in any job", func(t *testing.T) {
+		rc := createRC("release-please", []string{"release-please:Main googleapis/release-please-action@v4"})
+		step := &model.Step{ID: "release", Uses: "googleapis/release-please-action@v4"}
+		assert.True(t, isStepSkipped(rc, step, stepStageMain))
+	})
+
+	t.Run("skip by job:uses value", func(t *testing.T) {
+		rc := createRC("release-please", []string{"release-please:googleapis/release-please-action@v4"})
+		step := &model.Step{ID: "release", Uses: "googleapis/release-please-action@v4"}
+		assert.True(t, isStepSkipped(rc, step, stepStageMain))
+	})
+
+	t.Run("uses value filter does not match different step", func(t *testing.T) {
+		rc := createRC("job1", []string{"actions/other@v1"})
+		step := &model.Step{ID: "checkout", Uses: "actions/checkout@v4"}
+		assert.False(t, isStepSkipped(rc, step, stepStageMain))
+	})
 }
 
 func TestIsContinueOnError(t *testing.T) {
