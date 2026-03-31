@@ -1,7 +1,10 @@
 package runner
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"testing"
@@ -9,6 +12,7 @@ import (
 	"github.com/nektos/act/pkg/common"
 	"github.com/nektos/act/pkg/container"
 	"github.com/nektos/act/pkg/model"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -336,4 +340,75 @@ func TestNewJobExecutor(t *testing.T) {
 			fmt.Println("::endgroup::")
 		})
 	}
+}
+
+func TestJobExecutorStepJSONFields(t *testing.T) {
+	var buf bytes.Buffer
+	logger := logrus.New()
+	logger.SetOutput(&buf)
+	logger.SetFormatter(&logrus.JSONFormatter{})
+
+	ctx := common.WithJobErrorContainer(context.Background())
+	ctx = common.WithLogger(ctx, logger.WithContext(ctx))
+
+	jim := &jobInfoMock{}
+	sfm := &stepFactoryMock{}
+	rc := &RunContext{
+		JobContainer: &jobContainerMock{},
+		Run: &model.Run{
+			JobID: "test",
+			Workflow: &model.Workflow{
+				Jobs: map[string]*model.Job{
+					"test": {},
+				},
+			},
+		},
+		Config:           &Config{},
+		nodeToolFullPath: "node",
+	}
+	rc.ExprEval = rc.NewExpressionEvaluator(ctx)
+
+	steps := []*model.Step{{ID: "1"}}
+	jim.On("steps").Return(steps)
+	jim.On("matrix").Return(map[string]interface{}{})
+	jim.On("startContainer").Return(func(_ context.Context) error { return nil })
+	jim.On("stopContainer").Return(func(_ context.Context) error { return nil })
+	jim.On("interpolateOutputs").Return(func(_ context.Context) error { return nil })
+	jim.On("closeContainer").Return(func(_ context.Context) error { return nil })
+	jim.On("result", "success")
+
+	sm := &stepMock{}
+	sfm.On("newStep", steps[0], rc).Return(sm, nil)
+	sm.On("pre").Return(func(_ context.Context) error { return nil })
+	sm.On("main").Return(func(_ context.Context) error { return nil })
+	sm.On("post").Return(func(_ context.Context) error { return nil })
+
+	executor := newJobExecutor(jim, sfm, rc)
+	err := executor(ctx)
+	assert.Nil(t, err)
+
+	scan := bufio.NewScanner(&buf)
+	var hasSetupJobStep, hasCompleteJobStep bool
+	for scan.Scan() {
+		entry := map[string]interface{}{}
+		if json.Unmarshal(scan.Bytes(), &entry) != nil {
+			continue
+		}
+		stepVal, hasStep := entry["step"]
+		if !hasStep {
+			continue
+		}
+		_, hasStepID := entry["stepID"]
+		_, hasStepidLower := entry["stepid"]
+		assert.True(t, hasStepID, "log entry with step=%q should have stepID field (camelCase)", stepVal)
+		assert.False(t, hasStepidLower, "log entry with step=%q should not have stepid field (use camelCase stepID)", stepVal)
+
+		if stepVal == "Set up job" {
+			hasSetupJobStep = true
+		} else if stepVal == "Complete job" {
+			hasCompleteJobStep = true
+		}
+	}
+	assert.True(t, hasSetupJobStep, "should have log entries for 'Set up job' step")
+	assert.True(t, hasCompleteJobStep, "should have log entries for 'Complete job' step")
 }

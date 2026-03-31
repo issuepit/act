@@ -133,7 +133,7 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 	pipeline = append(pipeline, steps...)
 
 	return common.NewPipelineExecutor(
-		common.NewFieldExecutor("step", "Set up job", common.NewFieldExecutor("stepid", []string{"--setup-job"},
+		common.NewFieldExecutor("step", "Set up job", common.NewFieldExecutor("stepID", []string{"--setup-job"},
 			common.NewPipelineExecutor(common.NewInfoExecutor("\u2B50 Run Set up job"), info.startContainer(), rc.InitializeNodeTool()).
 				Then(common.NewFieldExecutor("stepResult", model.StepStatusSuccess, common.NewInfoExecutor("  \u2705  Success - Set up job"))).
 				ThenError(setJobError).OnError(common.NewFieldExecutor("stepResult", model.StepStatusFailure, common.NewInfoExecutor("  \u274C  Failure - Set up job"))))),
@@ -148,7 +148,7 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 				}
 				return postExecutor(ctx)
 			}).
-			Finally(common.NewFieldExecutor("step", "Complete job", common.NewFieldExecutor("stepid", []string{"--complete-job"},
+			Finally(common.NewFieldExecutor("step", "Complete job", common.NewFieldExecutor("stepID", []string{"--complete-job"},
 				common.NewInfoExecutor("\u2B50 Run Complete job").
 					Finally(stopContainerExecutor).
 					Finally(
