@@ -219,7 +219,8 @@ func (j *TestJobFileInfo) runTest(ctx context.Context, t *testing.T, cfg *Config
 }
 
 type TestConfig struct {
-	LocalRepositories map[string]string `yaml:"local-repositories"`
+	LocalRepositories  map[string]string `yaml:"local-repositories"`
+	RemoteRepositories map[string]string `yaml:"remote-repositories"`
 }
 
 func TestRunEvent(t *testing.T) {
@@ -351,13 +352,21 @@ func TestRunEvent(t *testing.T) {
 			if file, err := os.ReadFile(testConfigFile); err == nil {
 				testConfig := &TestConfig{}
 				if yaml.Unmarshal(file, testConfig) == nil {
+					var baseCache ActionCache = GoGitActionCache{
+						path.Clean(path.Join(workdir, "cache")),
+					}
 					if testConfig.LocalRepositories != nil {
-						config.ActionCache = &LocalRepositoryCache{
-							Parent: GoGitActionCache{
-								path.Clean(path.Join(workdir, "cache")),
-							},
+						baseCache = &LocalRepositoryCache{
+							Parent:            baseCache,
 							LocalRepositories: testConfig.LocalRepositories,
 							CacheDirCache:     map[string]string{},
+						}
+						config.ActionCache = baseCache
+					}
+					if testConfig.RemoteRepositories != nil {
+						config.ActionCache = &RemoteRepositoryCache{
+							Parent:             baseCache,
+							RemoteRepositories: testConfig.RemoteRepositories,
 						}
 					}
 				}

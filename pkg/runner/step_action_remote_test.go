@@ -639,3 +639,71 @@ func Test_safeFilename(t *testing.T) {
 		})
 	}
 }
+
+func TestStepActionRemoteRemoteActionToken(t *testing.T) {
+	table := []struct {
+		name              string
+		remoteActionToken string
+		githubToken       string
+		expectedToken     string
+	}{
+		{
+			name:              "uses-remote-action-token-when-set",
+			remoteActionToken: "MY_REMOTE_ACTION_PAT",
+			githubToken:       "GITHUB_TOKEN",
+			expectedToken:     "MY_REMOTE_ACTION_PAT",
+		},
+		{
+			name:              "falls-back-to-github-token-when-not-set",
+			remoteActionToken: "",
+			githubToken:       "GITHUB_TOKEN",
+			expectedToken:     "GITHUB_TOKEN",
+		},
+	}
+
+	for _, tt := range table {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			sarm := &stepActionRemoteMocks{}
+
+			fetchedToken := ""
+			mockCache := &mockActionCache{}
+			mockCache.On("Fetch", mock.Anything, "org/repo", "https://github.com/org/repo", "ref", tt.expectedToken).
+				Return("abc123sha", nil).
+				Run(func(args mock.Arguments) {
+					fetchedToken = args.String(4)
+				})
+
+			sar := &stepActionRemote{
+				Step: &model.Step{
+					Uses: "org/repo@ref",
+				},
+				RunContext: &RunContext{
+					Config: &Config{
+						GitHubInstance:    "github.com",
+						Token:             tt.githubToken,
+						RemoteActionToken: tt.remoteActionToken,
+						ActionCache:       mockCache,
+					},
+					Run: &model.Run{
+						JobID: "1",
+						Workflow: &model.Workflow{
+							Jobs: map[string]*model.Job{
+								"1": {},
+							},
+						},
+					},
+				},
+				readAction: sarm.readAction,
+			}
+
+			sarm.On("readAction", sar.Step, mock.Anything, "", mock.Anything, mock.Anything).Return(&model.Action{}, nil)
+
+			err := sar.pre()(ctx)
+			assert.Nil(t, err)
+			assert.Equal(t, tt.expectedToken, fetchedToken)
+			sarm.AssertExpectations(t)
+			mockCache.AssertExpectations(t)
+		})
+	}
+}

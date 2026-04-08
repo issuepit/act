@@ -25,18 +25,39 @@ type LocalRepositoryCache struct {
 func (l *LocalRepositoryCache) Fetch(ctx context.Context, cacheDir, url, ref, token string) (string, error) {
 	logger := common.Logger(ctx)
 	logger.Debugf("LocalRepositoryCache fetch %s with ref %s", url, ref)
+
+	// Exact match: full URL with ref
 	if dest, ok := l.LocalRepositories[fmt.Sprintf("%s@%s", url, ref)]; ok {
 		logger.Infof("LocalRepositoryCache matched %s with ref %s to %s", url, ref, dest)
 		l.CacheDirCache[fmt.Sprintf("%s@%s", cacheDir, ref)] = dest
 		return ref, nil
 	}
+
 	if purl, err := goURL.Parse(url); err == nil {
-		if dest, ok := l.LocalRepositories[fmt.Sprintf("%s@%s", strings.TrimPrefix(purl.Path, "/"), ref)]; ok {
+		urlPath := strings.TrimPrefix(purl.Path, "/")
+
+		// Exact match: path-only (any host/protocol) with ref
+		if dest, ok := l.LocalRepositories[fmt.Sprintf("%s@%s", urlPath, ref)]; ok {
 			logger.Infof("LocalRepositoryCache matched %s with ref %s to %s", url, ref, dest)
 			l.CacheDirCache[fmt.Sprintf("%s@%s", cacheDir, ref)] = dest
 			return ref, nil
 		}
+
+		// Wildcard match: full URL without ref (matches any ref)
+		if dest, ok := l.LocalRepositories[url]; ok {
+			logger.Infof("LocalRepositoryCache wildcard matched %s with ref %s to %s", url, ref, dest)
+			l.CacheDirCache[fmt.Sprintf("%s@%s", cacheDir, ref)] = dest
+			return ref, nil
+		}
+
+		// Wildcard match: path-only without ref (matches any host/protocol and any ref)
+		if dest, ok := l.LocalRepositories[urlPath]; ok {
+			logger.Infof("LocalRepositoryCache wildcard matched %s with ref %s to %s", url, ref, dest)
+			l.CacheDirCache[fmt.Sprintf("%s@%s", cacheDir, ref)] = dest
+			return ref, nil
+		}
 	}
+
 	logger.Infof("LocalRepositoryCache not matched %s with Ref %s", url, ref)
 	return l.Parent.Fetch(ctx, cacheDir, url, ref, token)
 }

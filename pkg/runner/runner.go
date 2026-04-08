@@ -58,6 +58,7 @@ type Config struct {
 	RemoteName                         string                       // remote name in local git repo config
 	ReplaceGheActionWithGithubCom      []string                     // Use actions from GitHub Enterprise instance to GitHub
 	ReplaceGheActionTokenWithGithubCom string                       // Token of private action repo on GitHub.
+	RemoteActionToken                  string                       // Token to use when fetching remote actions (overrides github token for action fetch)
 	Matrix                             map[string]map[string]bool   // Matrix config to run
 	ContainerNetworkMode               docker_container.NetworkMode // the network mode of job containers (the value of --network)
 	ActionCache                        ActionCache                  // Use a custom ActionCache Implementation
