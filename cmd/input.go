@@ -61,6 +61,8 @@ type Input struct {
 	networkName                        string
 	useNewActionCache                  bool
 	localRepository                    []string
+	remoteRepository                   []string
+	actionRemoteToken                  string
 	listOptions                        bool
 	validate                           bool
 	strict                             bool

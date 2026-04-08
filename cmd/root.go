@@ -128,6 +128,8 @@ func createRootCommand(ctx context.Context, input *Input, version string) *cobra
 	rootCmd.PersistentFlags().StringVarP(&input.networkName, "network", "", "host", "Sets a docker network name. Defaults to host.")
 	rootCmd.PersistentFlags().BoolVarP(&input.useNewActionCache, "use-new-action-cache", "", false, "Enable using the new Action Cache for storing Actions locally")
 	rootCmd.PersistentFlags().StringArrayVarP(&input.localRepository, "local-repository", "", []string{}, "Replaces the specified repository and ref with a local folder (e.g. https://github.com/test/test@v0=/home/act/test or test/test@v0=/home/act/test, the latter matches any hosts or protocols)")
+	rootCmd.PersistentFlags().StringArrayVarP(&input.remoteRepository, "remote-repository", "", []string{}, "Replaces the specified repository and ref with another repository and ref (e.g. https://github.com/test/test@v0=https://github.com/myorg/test@v1 or test/test@v0=https://github.com/myorg/test@v1, the latter matches any hosts or protocols)")
+	rootCmd.PersistentFlags().StringVarP(&input.actionRemoteToken, "action-remote-token", "", "", "PAT to use for fetching remote actions from a private repository")
 	rootCmd.PersistentFlags().BoolVar(&input.listOptions, "list-options", false, "Print a json structure of compatible options")
 	rootCmd.PersistentFlags().IntVar(&input.concurrentJobs, "concurrent-jobs", 0, "Maximum number of concurrent jobs to run. Default is the number of CPUs available.")
 	rootCmd.PersistentFlags().StringVar(&input.containerNamePrefix, "container-name-prefix", "", "Prefix to be added to the front of container names")
@@ -645,6 +647,7 @@ func newRunCommand(ctx context.Context, input *Input) func(*cobra.Command, []str
 			RemoteName:                         input.remoteName,
 			ReplaceGheActionWithGithubCom:      input.replaceGheActionWithGithubCom,
 			ReplaceGheActionTokenWithGithubCom: input.replaceGheActionTokenWithGithubCom,
+			RemoteActionToken:                  input.actionRemoteToken,
 			Matrix:                             matrixes,
 			ContainerNetworkMode:               docker_container.NetworkMode(input.networkName),
 			ConcurrentJobs:                     input.concurrentJobs,
@@ -652,7 +655,7 @@ func newRunCommand(ctx context.Context, input *Input) func(*cobra.Command, []str
 			ContainerNameSuffix:                input.containerNameSuffix,
 			SkipSteps:                          input.skipSteps,
 		}
-		if input.useNewActionCache || len(input.localRepository) > 0 {
+		if input.useNewActionCache || len(input.localRepository) > 0 || len(input.remoteRepository) > 0 {
 			if input.actionOfflineMode {
 				config.ActionCache = &runner.GoGitActionCacheOfflineMode{
 					Parent: runner.GoGitActionCache{
@@ -674,6 +677,17 @@ func newRunCommand(ctx context.Context, input *Input) func(*cobra.Command, []str
 					Parent:            config.ActionCache,
 					LocalRepositories: localRepositories,
 					CacheDirCache:     map[string]string{},
+				}
+			}
+			if len(input.remoteRepository) > 0 {
+				remoteRepositories := map[string]string{}
+				for _, r := range input.remoteRepository {
+					k, v, _ := strings.Cut(r, "=")
+					remoteRepositories[k] = v
+				}
+				config.ActionCache = &runner.RemoteRepositoryCache{
+					Parent:             config.ActionCache,
+					RemoteRepositories: remoteRepositories,
 				}
 			}
 		}
