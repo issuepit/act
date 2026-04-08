@@ -62,6 +62,90 @@ func TestRemoteRepositoryCache_FetchPathOnly(t *testing.T) {
 	parent.AssertExpectations(t)
 }
 
+func TestRemoteRepositoryCache_FetchWildcardFullURL(t *testing.T) {
+	ctx := context.Background()
+	parent := &mockActionCache{}
+	// Wildcard: no ref in key, original ref "v2" preserved in Fetch call
+	parent.On("Fetch", ctx, "old/action", "https://newgit.com/new/action", "v2", "token").
+		Return("abc123", nil)
+
+	cache := &RemoteRepositoryCache{
+		Parent: parent,
+		RemoteRepositories: map[string]string{
+			// No @ref in key → matches any ref
+			"https://github.com/old/action": "https://newgit.com/new/action",
+		},
+	}
+
+	sha, err := cache.Fetch(ctx, "old/action", "https://github.com/old/action", "v2", "token")
+	assert.NoError(t, err)
+	assert.Equal(t, "abc123", sha)
+	parent.AssertExpectations(t)
+}
+
+func TestRemoteRepositoryCache_FetchWildcardPathOnly(t *testing.T) {
+	ctx := context.Background()
+	parent := &mockActionCache{}
+	// Wildcard: no ref in key, original ref "main" preserved
+	parent.On("Fetch", ctx, "old/action", "https://newgit.com/new/action", "main", "token").
+		Return("abc123", nil)
+
+	cache := &RemoteRepositoryCache{
+		Parent: parent,
+		RemoteRepositories: map[string]string{
+			// Path-only, no @ref → matches any host and any ref
+			"old/action": "https://newgit.com/new/action",
+		},
+	}
+
+	sha, err := cache.Fetch(ctx, "old/action", "https://github.com/old/action", "main", "token")
+	assert.NoError(t, err)
+	assert.Equal(t, "abc123", sha)
+	parent.AssertExpectations(t)
+}
+
+func TestRemoteRepositoryCache_FetchWildcardWithTargetRef(t *testing.T) {
+	ctx := context.Background()
+	parent := &mockActionCache{}
+	// Wildcard source but explicit target ref
+	parent.On("Fetch", ctx, "old/action", "https://newgit.com/new/action", "stable", "token").
+		Return("abc123", nil)
+
+	cache := &RemoteRepositoryCache{
+		Parent: parent,
+		RemoteRepositories: map[string]string{
+			// No @ref in source key, but explicit @ref in target
+			"old/action": "https://newgit.com/new/action@stable",
+		},
+	}
+
+	sha, err := cache.Fetch(ctx, "old/action", "https://github.com/old/action", "any-ref", "token")
+	assert.NoError(t, err)
+	assert.Equal(t, "abc123", sha)
+	parent.AssertExpectations(t)
+}
+
+func TestRemoteRepositoryCache_ExactMatchTakesPriorityOverWildcard(t *testing.T) {
+	ctx := context.Background()
+	parent := &mockActionCache{}
+	// Exact match should win over wildcard
+	parent.On("Fetch", ctx, "old/action", "https://exact.com/action", "v1", "token").
+		Return("abc123", nil)
+
+	cache := &RemoteRepositoryCache{
+		Parent: parent,
+		RemoteRepositories: map[string]string{
+			"old/action@v1": "https://exact.com/action@v1",
+			"old/action":    "https://wildcard.com/action",
+		},
+	}
+
+	sha, err := cache.Fetch(ctx, "old/action", "https://github.com/old/action", "v1", "token")
+	assert.NoError(t, err)
+	assert.Equal(t, "abc123", sha)
+	parent.AssertExpectations(t)
+}
+
 func TestRemoteRepositoryCache_FetchNoMatch(t *testing.T) {
 	ctx := context.Background()
 	parent := &mockActionCache{}
@@ -113,6 +197,28 @@ func TestSplitRemoteURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			gotURL, gotRef := splitRemoteURL(tt.input)
+			assert.Equal(t, tt.wantURL, gotURL)
+			assert.Equal(t, tt.wantRef, gotRef)
+		})
+	}
+}
+
+func TestResolveRemoteRef(t *testing.T) {
+	tests := []struct {
+		dest        string
+		originalRef string
+		wantURL     string
+		wantRef     string
+	}{
+		// Target has explicit ref → use it
+		{"https://github.com/org/repo@v2", "v1", "https://github.com/org/repo", "v2"},
+		// Target has no ref → use original ref
+		{"https://github.com/org/repo", "v1", "https://github.com/org/repo", "v1"},
+		{"https://github.com/org/repo", "main", "https://github.com/org/repo", "main"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.dest+"_from_"+tt.originalRef, func(t *testing.T) {
+			gotURL, gotRef := resolveRemoteRef(tt.dest, tt.originalRef)
 			assert.Equal(t, tt.wantURL, gotURL)
 			assert.Equal(t, tt.wantRef, gotRef)
 		})
