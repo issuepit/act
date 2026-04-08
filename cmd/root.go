@@ -682,7 +682,11 @@ func newRunCommand(ctx context.Context, input *Input) func(*cobra.Command, []str
 			if len(input.remoteRepository) > 0 {
 				remoteRepositories := map[string]string{}
 				for _, r := range input.remoteRepository {
-					k, v, _ := strings.Cut(r, "=")
+					k, v, found := strings.Cut(r, "=")
+					if !found {
+						log.Warnf("Ignoring invalid --remote-repository entry (missing '='): %s", r)
+						continue
+					}
 					remoteRepositories[k] = v
 				}
 				config.ActionCache = &runner.RemoteRepositoryCache{

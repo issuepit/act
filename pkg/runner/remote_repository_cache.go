@@ -30,7 +30,7 @@ func (r *RemoteRepositoryCache) Fetch(ctx context.Context, cacheDir, url, ref, t
 			return r.Parent.Fetch(ctx, cacheDir, newURL, newRef, token)
 		}
 	}
-	logger.Infof("RemoteRepositoryCache not matched %s with Ref %s", url, ref)
+	logger.Infof("RemoteRepositoryCache not matched %s with ref %s", url, ref)
 	return r.Parent.Fetch(ctx, cacheDir, url, ref, token)
 }
 
